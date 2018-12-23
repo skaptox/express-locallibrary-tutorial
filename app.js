@@ -46,7 +46,6 @@ app.use((err, req, res, next) => {
 
 // Set up mongoose connection
 
-/*
 const mongoose = require('mongoose');
 
 const mongoDB = 'mongodb://skaptox:yurymar94@ds157667.mlab.com:57667/local_library';
@@ -56,7 +55,6 @@ mongoose.connect(
 );
 mongoose.Promise = global.Promise;
 const db = mongoose.connection;
-db.on('error', console.error.bind(console, 'MongoDB connection error:'))
-*/
+db.on('error', console.error.bind(console, 'MongoDB connection error:'));
 
 module.exports = app;
