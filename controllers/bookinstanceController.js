@@ -1,9 +1,12 @@
 /* eslint-disable func-names */
+const async = require('async');
+
 const { body, validationResult } = require('express-validator/check');
 const { sanitizeBody } = require('express-validator/filter');
-const BookInstance = require('../models/bookinstance');
 const Book = require('../models/book');
+const BookInstance = require('../models/bookinstance');
 
+// Display list of all BookInstances.
 exports.bookinstance_list = function (req, res, next) {
   BookInstance.find()
     .populate('book')
@@ -11,7 +14,7 @@ exports.bookinstance_list = function (req, res, next) {
       if (err) {
         return next(err);
       }
-      // Successful, so render
+      // Successful, so render.
       res.render('bookinstance_list', {
         title: 'Book Instance List',
         bookinstance_list: list_bookinstances
@@ -102,91 +105,149 @@ exports.bookinstance_create_post = [
           bookinstance
         });
       });
-      return;
+    } else {
+      // Data from form is valid
+      bookinstance.save((err) => {
+        if (err) {
+          return next(err);
+        }
+        // Successful - redirect to new record.
+        res.redirect(bookinstance.url);
+      });
     }
-    // Data from form is valid.
-    bookinstance.save((err) => {
-      if (err) {
-        return next(err);
-      }
-      // Successful - redirect to new record.
-      res.redirect(bookinstance.url);
-    });
   }
 ];
 
-// Display Author delete form on GET.
-exports.author_delete_get = function (req, res, next) {
+// Display BookInstance delete form on GET.
+exports.bookinstance_delete_get = function (req, res, next) {
+  BookInstance.findById(req.params.id)
+    .populate('book')
+    .exec((err, bookinstance) => {
+      if (err) {
+        return next(err);
+      }
+      if (bookinstance == null) {
+        // No results.
+        res.redirect('/catalog/bookinstances');
+      }
+      // Successful, so render.
+      res.render('bookinstance_delete', {
+        title: 'Delete BookInstance',
+        bookinstance
+      });
+    });
+};
+
+// Handle BookInstance delete on POST.
+exports.bookinstance_delete_post = function (req, res, next) {
+  // Assume valid BookInstance id in field.
+  BookInstance.findByIdAndRemove(req.body.id, (err) => {
+    if (err) {
+      return next(err);
+    }
+    // Success, so redirect to list of BookInstance items.
+    res.redirect('/catalog/bookinstances');
+  });
+};
+
+// Display BookInstance update form on GET.
+exports.bookinstance_update_get = function (req, res, next) {
+  // Get book, authors and genres for form.
   async.parallel(
     {
-      author(callback) {
-        Author.findById(req.params.id).exec(callback);
+      bookinstance(callback) {
+        BookInstance.findById(req.params.id)
+          .populate('book')
+          .exec(callback);
       },
-      authors_books(callback) {
-        Book.find({ author: req.params.id }).exec(callback);
+      books(callback) {
+        Book.find(callback);
       }
     },
     (err, results) => {
       if (err) {
         return next(err);
       }
-      if (results.author == null) {
+      if (results.bookinstance == null) {
         // No results.
-        res.redirect('/catalog/authors');
+        var err = new Error('Book copy not found');
+        err.status = 404;
+        return next(err);
       }
-      // Successful, so render.
-      res.render('author_delete', {
-        title: 'Delete Author',
-        author: results.author,
-        author_books: results.authors_books
+      // Success.
+      res.render('bookinstance_form', {
+        title: 'Update  BookInstance',
+        book_list: results.books,
+        selected_book: results.bookinstance.book._id,
+        bookinstance: results.bookinstance
       });
     }
   );
 };
 
-// Handle Author delete on POST.
-exports.author_delete_post = function (req, res, next) {
-  async.parallel(
-    {
-      author(callback) {
-        Author.findById(req.body.authorid).exec(callback);
-      },
-      authors_books(callback) {
-        Book.find({ author: req.body.authorid }).exec(callback);
-      }
-    },
-    (err, results) => {
-      if (err) {
-        return next(err);
-      }
-      // Success
-      if (results.authors_books.length > 0) {
-        // Author has books. Render in same way as for GET route.
-        res.render('author_delete', {
-          title: 'Delete Author',
-          author: results.author,
-          author_books: results.authors_books
+// Handle BookInstance update on POST.
+exports.bookinstance_update_post = [
+  // Validate fields.
+  body('book', 'Book must be specified')
+    .isLength({ min: 1 })
+    .trim(),
+  body('imprint', 'Imprint must be specified')
+    .isLength({ min: 1 })
+    .trim(),
+  body('due_back', 'Invalid date')
+    .optional({ checkFalsy: true })
+    .isISO8601(),
+
+  // Sanitize fields.
+  sanitizeBody('book')
+    .trim()
+    .escape(),
+  sanitizeBody('imprint')
+    .trim()
+    .escape(),
+  sanitizeBody('status')
+    .trim()
+    .escape(),
+  sanitizeBody('due_back').toDate(),
+
+  // Process request after validation and sanitization.
+  (req, res, next) => {
+    // Extract the validation errors from a request.
+    const errors = validationResult(req);
+
+    // Create a BookInstance object with escaped/trimmed data and current id.
+    const bookinstance = new BookInstance({
+      book: req.body.book,
+      imprint: req.body.imprint,
+      status: req.body.status,
+      due_back: req.body.due_back,
+      _id: req.params.id
+    });
+
+    if (!errors.isEmpty()) {
+      // There are errors so render the form again, passing sanitized values and errors.
+      Book.find({}, 'title').exec((err, books) => {
+        if (err) {
+          return next(err);
+        }
+        // Successful, so render.
+        res.render('bookinstance_form', {
+          title: 'Update BookInstance',
+          book_list: books,
+          selected_book: bookinstance.book._id,
+          errors: errors.array(),
+          bookinstance
         });
-      } else {
-        // Author has no books. Delete object and redirect to the list of authors.
-        Author.findByIdAndRemove(req.body.authorid, (err) => {
-          if (err) {
-            return next(err);
-          }
-          // Success - go to author list
-          res.redirect('/catalog/authors');
-        });
-      }
+      });
+    } else {
+      // Data from form is valid.
+      BookInstance.findByIdAndUpdate(req.params.id, bookinstance, {}, (err, thebookinstance) => {
+        if (err) {
+          return next(err);
+        }
+        // Successful - redirect to detail page.
+        res.redirect(thebookinstance.url);
+      });
     }
-  );
-};
-
-// Display BookInstance update form on GET.
-exports.bookinstance_update_get = function (req, res) {
-  res.send('NOT IMPLEMENTED: BookInstance update GET');
-};
-
-// Handle bookinstance update on POST.
-exports.bookinstance_update_post = function (req, res) {
-  res.send('NOT IMPLEMENTED: BookInstance update POST');
-};
+  }
+];
