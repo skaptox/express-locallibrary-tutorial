@@ -1,28 +1,56 @@
-const mongoose = require('mongoose');
+var mongoose = require('mongoose');
+var moment = require('moment'); // For date handling.
 
-const Schema = mongoose.Schema;
+var Schema = mongoose.Schema;
 
-const AuthorSchema = new Schema({
-  first_name: { type: String, required: true, max: 100 },
-  family_name: { type: String, required: true, max: 100 },
-  date_of_birth: { type: Date },
-  date_of_death: { type: Date }
+var AuthorSchema = new Schema(
+    {
+    first_name: {type: String, required: true, max: 100},
+    family_name: {type: String, required: true, max: 100},
+    date_of_birth: { type: Date },
+    date_of_death: { type: Date },
+    }
+  );
+
+// Virtual for author "full" name.
+AuthorSchema
+.virtual('name')
+.get(function () {
+  return this.family_name +', '+this.first_name;
 });
 
-// Virtual for author's full name
-AuthorSchema.virtual('name').get(function () {
-  return `${this.family_name}, ${this.first_name}`;
+// Virtual for this author instance URL.
+AuthorSchema
+.virtual('url')
+.get(function () {
+  return '/catalog/author/'+this._id
 });
 
-// Virtual for author's lifespan
-AuthorSchema.virtual('lifespan').get(function () {
-  return (this.date_of_death.getYear() - this.date_of_birth.getYear()).toString();
+AuthorSchema
+.virtual('lifespan')
+.get(function () {
+  var lifetime_string='';
+  if (this.date_of_birth) {
+      lifetime_string=moment(this.date_of_birth).format('MMMM Do, YYYY');
+      }
+  lifetime_string+=' - ';
+  if (this.date_of_death) {
+      lifetime_string+=moment(this.date_of_death).format('MMMM Do, YYYY');
+      }
+  return lifetime_string
 });
 
-// Virtual for author's URL
-AuthorSchema.virtual('url').get(function () {
-  return `/catalog/author/${this._id}`;
+AuthorSchema
+.virtual('date_of_birth_yyyy_mm_dd')
+.get(function () {
+  return moment(this.date_of_birth).format('YYYY-MM-DD');
 });
 
-// Export model
+AuthorSchema
+.virtual('date_of_death_yyyy_mm_dd')
+.get(function () {
+  return moment(this.date_of_death).format('YYYY-MM-DD');
+});
+
+// Export model.
 module.exports = mongoose.model('Author', AuthorSchema);
