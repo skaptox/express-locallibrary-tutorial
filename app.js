@@ -53,7 +53,7 @@ app.use((err, req, res, next) => {
 
 const mongoose = require('mongoose');
 
-const mongoDB = 'mongodb://skaptox:yurymar94@ds157667.mlab.com:57667/local_library';
+const mongoDB = process.env.MONGODB_URI || 'mongodb://skaptox:yurymar94@ds157667.mlab.com:57667/local_library';
 mongoose.connect(
   mongoDB,
   { useNewUrlParser: true }
